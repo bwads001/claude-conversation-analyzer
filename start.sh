@@ -75,11 +75,15 @@ if docker-compose -f config/docker-compose.yml --env-file .env up -d; then
     echo ""
     print_success "All services started successfully!"
     
+    # Detect the assigned ports
+    WEB_PORT=$(docker-compose -f config/docker-compose.yml --env-file .env port web 80 2>/dev/null | cut -d: -f2)
+    API_PORT=$(docker-compose -f config/docker-compose.yml --env-file .env port api 8000 2>/dev/null | cut -d: -f2)
+    
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "  🌐 Web Interface: ${GREEN}http://localhost:$FRONTEND_PORT${NC}"
-    echo "  📋 API Documentation: ${GREEN}http://localhost:$BACKEND_PORT/docs${NC}"
+    echo "  🌐 Web Interface: ${GREEN}http://localhost:$WEB_PORT${NC}"
+    echo "  📋 API Documentation: ${GREEN}http://localhost:$API_PORT/docs${NC}"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
@@ -101,7 +105,7 @@ if docker-compose -f config/docker-compose.yml --env-file .env up -d; then
     
     # Check API health
     for i in {1..60}; do
-        if curl -f http://localhost:$BACKEND_PORT/api/health &> /dev/null; then
+        if curl -f http://localhost:$API_PORT/api/health &> /dev/null; then
             print_success "API server is ready"
             break
         fi
@@ -113,7 +117,7 @@ if docker-compose -f config/docker-compose.yml --env-file .env up -d; then
     
     # Check web interface
     for i in {1..30}; do
-        if curl -f http://localhost:$FRONTEND_PORT &> /dev/null; then
+        if curl -f http://localhost:$WEB_PORT &> /dev/null; then
             print_success "Web interface is ready"
             break
         fi
@@ -126,7 +130,7 @@ if docker-compose -f config/docker-compose.yml --env-file .env up -d; then
     echo ""
     print_success "🎉 Claude Conversation Analyzer is ready!"
     echo ""
-    echo "Open ${GREEN}http://localhost:$FRONTEND_PORT${NC} in your browser to start searching your conversations."
+    echo "Open ${GREEN}http://localhost:$WEB_PORT${NC} in your browser to start searching your conversations."
     echo ""
     echo "To stop the services, press Ctrl+C or run:"
     echo "  ${YELLOW}docker-compose -f config/docker-compose.yml down${NC}"
@@ -138,13 +142,13 @@ if docker-compose -f config/docker-compose.yml --env-file .env up -d; then
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         # Detect OS and open browser
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            open http://localhost:$FRONTEND_PORT
+            open http://localhost:$WEB_PORT
         elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            xdg-open http://localhost:$FRONTEND_PORT &> /dev/null || echo "Please open http://localhost:$FRONTEND_PORT in your browser"
+            xdg-open http://localhost:$WEB_PORT &> /dev/null || echo "Please open http://localhost:$WEB_PORT in your browser"
         elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-            start http://localhost:$FRONTEND_PORT
+            start http://localhost:$WEB_PORT
         else
-            echo "Please open http://localhost:$FRONTEND_PORT in your browser"
+            echo "Please open http://localhost:$WEB_PORT in your browser"
         fi
     fi
     
