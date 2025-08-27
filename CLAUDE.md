@@ -11,7 +11,7 @@ Claude Conversation Analyzer - A semantic search and timeline analysis tool for 
 ### Database Setup
 ```bash
 # Start PostgreSQL with pgvector extension
-docker-compose up -d
+docker-compose -f config/docker-compose.yml up -d
 
 # Initialize database schema
 python scripts/init_db.py

@@ -307,10 +307,10 @@ echo "First time setup may take 3-5 minutes..."
 echo ""
 
 # Stop any existing services
-docker-compose down &> /dev/null || true
+docker-compose -f config/docker-compose.yml down &> /dev/null || true
 
 # Build and start services
-if docker-compose up -d --build; then
+if docker-compose -f config/docker-compose.yml up -d --build; then
     print_success "All services started successfully!"
 else
     print_error "Failed to start services. Please check the error messages above."
@@ -328,7 +328,7 @@ echo "Waiting for database to be ready..."
 sleep 5
 
 # Run database initialization
-if docker-compose exec -T api python scripts/init_db.py; then
+if docker-compose -f config/docker-compose.yml exec -T api python scripts/init_db.py; then
     print_success "Database initialized successfully!"
 else
     print_warning "Database initialization had issues. This might be okay if it's already initialized."
@@ -347,14 +347,14 @@ echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Importing conversations (this may take a while)..."
-    if docker-compose exec -T api python scripts/ingest.py --all; then
+    if docker-compose -f config/docker-compose.yml exec -T api python scripts/ingest.py --all; then
         print_success "Conversations imported successfully!"
     else
         print_warning "Some conversations may have failed to import. This is usually okay."
     fi
 else
     echo "You can import conversations later by running:"
-    echo "  docker-compose exec api python scripts/ingest.py --all"
+    echo "  docker-compose -f config/docker-compose.yml exec api python scripts/ingest.py --all"
 fi
 
 echo ""
@@ -378,7 +378,7 @@ echo "  2. Search for topics like 'error handling' or 'React components'"
 echo "  3. Click on results to see full conversations"
 echo ""
 echo "To stop the services:"
-echo "  ${YELLOW}docker-compose down${NC}"
+echo "  ${YELLOW}docker-compose -f config/docker-compose.yml down${NC}"
 echo ""
 echo "To start the services again:"
 echo "  ${YELLOW}./start.sh${NC}"

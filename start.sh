@@ -68,10 +68,10 @@ echo "  🌐 React web interface"
 echo ""
 
 # Stop any existing services
-docker-compose down &> /dev/null
+docker-compose -f config/docker-compose.yml down &> /dev/null
 
 # Start services with live output
-if docker-compose up -d; then
+if docker-compose -f config/docker-compose.yml up -d; then
     echo ""
     print_success "All services started successfully!"
     
@@ -89,7 +89,7 @@ if docker-compose up -d; then
     
     # Check database health
     for i in {1..30}; do
-        if docker-compose exec -T postgres pg_isready -U claude -d conversations &> /dev/null; then
+        if docker-compose -f config/docker-compose.yml exec -T postgres pg_isready -U claude -d conversations &> /dev/null; then
             print_success "Database is ready"
             break
         fi
@@ -129,7 +129,7 @@ if docker-compose up -d; then
     echo "Open ${GREEN}http://localhost:$FRONTEND_PORT${NC} in your browser to start searching your conversations."
     echo ""
     echo "To stop the services, press Ctrl+C or run:"
-    echo "  ${YELLOW}docker-compose down${NC}"
+    echo "  ${YELLOW}docker-compose -f config/docker-compose.yml down${NC}"
     echo ""
     
     # Ask if user wants to open browser
@@ -151,7 +151,7 @@ if docker-compose up -d; then
     # Show logs option
     echo ""
     echo "To view service logs:"
-    echo "  ${YELLOW}docker-compose logs -f${NC}"
+    echo "  ${YELLOW}docker-compose -f config/docker-compose.yml logs -f${NC}"
     
 else
     echo ""
@@ -160,7 +160,7 @@ else
     echo "Common solutions:"
     echo "  • Make sure Docker Desktop is running"
     echo "  • Check that ports 3000, 8000, and 5432 are not in use"
-    echo "  • Try running: docker-compose down && docker-compose up -d --build"
+    echo "  • Try running: docker-compose -f config/docker-compose.yml down && docker-compose -f config/docker-compose.yml up -d --build"
     echo ""
     exit 1
 fi

@@ -116,13 +116,13 @@ cp .env.example .env
 
 3. **Start with Docker Compose**
 ```bash
-docker-compose up -d
+docker-compose -f config/docker-compose.yml up -d
 ```
 
 4. **Alternative: Local development setup**
 ```bash
 # Start PostgreSQL only
-docker-compose up -d postgres
+docker-compose -f config/docker-compose.yml up -d postgres
 
 # Install Python dependencies
 python -m venv venv
