@@ -1,7 +1,8 @@
+name: claude-conversation-analyzer
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: claude-analyzer-db
     environment:
       POSTGRES_DB: conversations
       POSTGRES_USER: claude
@@ -25,7 +26,6 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile.api
-    container_name: claude-analyzer-api
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -57,7 +57,6 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile.web
-    container_name: claude-analyzer-web
     environment:
       - VITE_API_URL=http://localhost:${BACKEND_PORT:-8000}
     ports:

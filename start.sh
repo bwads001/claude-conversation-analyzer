@@ -67,11 +67,8 @@ echo "  🔧 FastAPI backend server"
 echo "  🌐 React web interface"
 echo ""
 
-# Stop any existing services
-docker-compose -f config/docker-compose.yml down &> /dev/null
-
-# Remove any containers with conflicting names
-docker container rm -f claude-analyzer-db claude-analyzer-api claude-analyzer-web &> /dev/null || true
+# Stop any existing services from this project
+docker-compose -f config/docker-compose.yml down --remove-orphans &> /dev/null
 
 # Start services with live output
 if docker-compose -f config/docker-compose.yml up -d; then
