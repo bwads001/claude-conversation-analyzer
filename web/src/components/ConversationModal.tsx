@@ -143,7 +143,7 @@ export default function ConversationModal({ result, onClose }: ConversationModal
                 </div>
               </div>
             ) : currentData ? (
-              <div className="h-full overflow-y-auto p-6">
+              <div className="h-full overflow-y-auto p-6" style={{ maxHeight: 'calc(100vh - 200px)' }}>
                 <div className="max-w-none">
                   {/* Messages */}
                   <div className="space-y-4">

@@ -15,7 +15,9 @@ export default function MessageBubble({
   isMatched = false,
   searchQuery 
 }: MessageBubbleProps) {
-  const [showToolUses, setShowToolUses] = useState(false)
+  const hasToolUses = message.tool_uses && Object.keys(message.tool_uses).length > 0
+  const hasNoTextContent = !message.content.trim()
+  const [showToolUses, setShowToolUses] = useState(hasNoTextContent && hasToolUses)
 
   // Get the effective role - now that data is properly classified, just use the stored role
   const getEffectiveRole = (message: Message) => {
@@ -106,7 +108,6 @@ export default function MessageBubble({
            content.includes('/>')
   }
 
-  const hasToolUses = message.tool_uses && Object.keys(message.tool_uses).length > 0
   const effectiveRole = getEffectiveRole(message)
 
   return (
@@ -137,23 +138,34 @@ export default function MessageBubble({
 
       {/* Content */}
       <div className="prose prose-sm max-w-none">
-        {isCodeContent(message.content) ? (
-          <div className="bg-gray-900 text-gray-100 p-4 rounded-md overflow-x-auto">
-            <pre className="text-sm">
-              <code 
-                dangerouslySetInnerHTML={{ 
-                  __html: highlightContent(message.content, searchQuery) 
-                }} 
-              />
-            </pre>
+        {message.content.trim() ? (
+          isCodeContent(message.content) ? (
+            <div className="bg-gray-900 text-gray-100 p-4 rounded-md overflow-x-auto">
+              <pre className="text-sm">
+                <code 
+                  dangerouslySetInnerHTML={{ 
+                    __html: highlightContent(message.content, searchQuery) 
+                  }} 
+                />
+              </pre>
+            </div>
+          ) : (
+            <div 
+              className="text-gray-900 whitespace-pre-wrap leading-relaxed"
+              dangerouslySetInnerHTML={{ 
+                __html: highlightContent(message.content, searchQuery) 
+              }}
+            />
+          )
+        ) : hasToolUses ? (
+          <div className="text-gray-600 italic">
+            <Terminal className="h-4 w-4 inline mr-2" />
+            Tool-only message (no text content)
           </div>
         ) : (
-          <div 
-            className="text-gray-900 whitespace-pre-wrap leading-relaxed"
-            dangerouslySetInnerHTML={{ 
-              __html: highlightContent(message.content, searchQuery) 
-            }}
-          />
+          <div className="text-gray-400 italic">
+            Empty message
+          </div>
         )}
       </div>
 
