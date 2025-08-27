@@ -83,3 +83,15 @@ logs
 *.tmp
 *.temp
 .cache/
+
+# Testing and development
+.playwright-mcp/
+timeline-test-script.js
+IMPLEMENTATION_NOTES.md
+setup/test_data/
+
+# MyPy cache
+.mypy_cache/
+
+# Git housekeeping
+.git/gc.log
