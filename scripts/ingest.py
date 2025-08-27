@@ -1,342 +1,310 @@
 #!/usr/bin/env python3
 """
-Main ingestion script for Claude Conversation Analyzer.
+Flexible ingestion script for Claude conversation files.
 
-Processes Claude conversation JSONL files, generates embeddings,
-and stores everything in PostgreSQL with pgvector.
+Supports multiple ways to specify what to ingest:
+- All projects: python ingest_flexible.py --all
+- By project name: python ingest_flexible.py --project "wo-25-container-poc"
+- By full path: python ingest_flexible.py --project-path "/path/to/conversations"
+- Single file: python ingest_flexible.py --file "/path/to/conversation.jsonl"
 """
 
-import asyncio
-import logging
 import sys
+import argparse
+import asyncio
 from pathlib import Path
-from typing import Optional
-import click
 
-# Add src to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add src to path for imports
+sys.path.append(str(Path(__file__).parent.parent / 'src'))
 
-from parser import parse_conversation_files
+from parser import parse_conversation_files_grouped
 from database import ConversationDatabase, DatabaseConfig
-from embeddings import OllamaEmbeddings, EmbeddingConfig
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from embeddings import OllamaEmbeddings
 
 
-async def ingest_conversations(
-    input_path: Path,
-    db_config: DatabaseConfig,
-    embedding_config: EmbeddingConfig,
-    dry_run: bool = False
-):
-    """
-    Main ingestion pipeline.
+def find_projects_by_name(project_name: str, claude_projects_dir: Path, allow_multiple: bool = True) -> list[Path]:
+    """Find project directories by matching the project name."""
     
-    Args:
-        input_path: Directory containing conversation files
-        db_config: Database configuration
-        embedding_config: Embedding configuration
-        dry_run: If True, parse and generate embeddings but don't store
-    """
-    logger.info(f"Starting ingestion from {input_path}")
+    # Look for directories that contain the project name
+    candidates = []
+    for project_dir in claude_projects_dir.glob('*'):
+        if not project_dir.is_dir():
+            continue
+            
+        # Only include directories with conversation files
+        if not list(project_dir.glob('*.jsonl')):
+            continue
+            
+        dir_name = project_dir.name.lower()
+        search_name = project_name.lower()
+        
+        # Match if project name is contained in directory name
+        if search_name in dir_name:
+            candidates.append(project_dir)
     
-    # Step 1: Parse conversation files
-    logger.info("📁 Parsing conversation files...")
-    try:
-        conversations, messages = parse_conversation_files(input_path)
-        logger.info(f"Parsed {len(conversations)} conversations with {len(messages)} messages")
-    except Exception as e:
-        logger.error(f"Failed to parse conversations: {e}")
-        raise
+    if not candidates:
+        raise ValueError(f"No project found matching '{project_name}' in {claude_projects_dir}")
     
-    if not conversations:
-        logger.warning("No conversations found to process")
+    if len(candidates) == 1 or allow_multiple:
+        if len(candidates) > 1:
+            print(f"Found {len(candidates)} projects matching '{project_name}':")
+            total_files = 0
+            for candidate in candidates:
+                jsonl_count = len(list(candidate.glob('*.jsonl')))
+                total_files += jsonl_count
+                print(f"  📂 {candidate.name} ({jsonl_count} files)")
+            print(f"Total: {total_files} conversation files")
+            print()
+        return candidates
+    
+    # Multiple matches but not allowing multiple - show them and ask user to be more specific
+    print(f"Multiple projects found matching '{project_name}':")
+    for i, candidate in enumerate(candidates, 1):
+        jsonl_count = len(list(candidate.glob('*.jsonl')))
+        print(f"  {i}. {candidate.name} ({jsonl_count} files)")
+    
+    raise ValueError(f"Multiple matches found. Use --project-multiple to ingest all, or be more specific")
+
+
+def list_available_projects(claude_projects_dir: Path) -> None:
+    """List all available projects with conversation files."""
+    
+    print(f"📂 Available projects in {claude_projects_dir}:")
+    print("=" * 60)
+    
+    projects_with_files = []
+    for project_dir in sorted(claude_projects_dir.glob('*')):
+        if not project_dir.is_dir():
+            continue
+        
+        jsonl_files = list(project_dir.glob('*.jsonl'))
+        if jsonl_files:
+            # Extract meaningful project name from directory
+            dir_name = project_dir.name
+            # Remove common prefixes to make it cleaner
+            clean_name = dir_name.replace('-home-bwadsworth-', '')
+            projects_with_files.append((clean_name, dir_name, len(jsonl_files)))
+    
+    if not projects_with_files:
+        print("  No projects with conversation files found.")
         return
     
-    # Step 2: Generate embeddings
-    logger.info("🤖 Generating embeddings...")
-    embeddings = []
+    for clean_name, full_name, file_count in projects_with_files:
+        print(f"  📝 {clean_name}")
+        print(f"     Full name: {full_name}")
+        print(f"     Files: {file_count}")
+        print()
     
-    async with OllamaEmbeddings(embedding_config) as embedder:
-        # Check model availability
-        if not await embedder.is_model_available():
-            raise RuntimeError(f"Ollama model {embedding_config.model} not available")
-        
-        # Extract message contents for embedding
-        message_contents = [msg.content for msg in messages]
-        embeddings = await embedder.embed_conversations(message_contents)
-        
-        logger.info(f"Generated {len(embeddings)} embeddings")
-    
-    if dry_run:
-        logger.info("🔍 Dry run complete - no data stored")
-        print_summary(conversations, messages, embeddings)
-        return
-    
-    # Step 3: Store in database
-    logger.info("💾 Storing in database...")
+    print("Usage examples:")
+    print(f"  python {sys.argv[0]} --project 'work'")
+    print(f"  python {sys.argv[0]} --project 'my-project'")
+    print(f"  python {sys.argv[0]} --project-path '{claude_projects_dir}/specific-project'")
+
+
+async def ingest_conversations(project_paths: list, db_config: DatabaseConfig) -> bool:
+    """Ingest conversations from the given project paths."""
     
     db = ConversationDatabase(db_config)
-    await db.initialize()
+    embeddings = OllamaEmbeddings()
     
     try:
-        # Group messages by conversation for storage
-        conversations_dict = {conv.session_id: conv for conv in conversations}
-        current_conversation = None
-        current_messages = []
-        current_embeddings = []
-        stored_count = 0
-        
-        for i, message in enumerate(messages):
-            # Extract conversation info from message metadata or find matching conversation
-            message_conversation = None
-            for conv in conversations:
-                # This is a simplified match - in practice you'd match by file path or session
-                if conv.session_id in message.metadata.get('source_file', ''):
-                    message_conversation = conv
-                    break
-            
-            # If we can't match, use first conversation (fallback)
-            if not message_conversation:
-                message_conversation = conversations[0]
-            
-            if current_conversation is None or current_conversation.session_id != message_conversation.session_id:
-                # Store previous conversation if exists
-                if current_conversation and current_messages:
-                    await db.store_conversation(
-                        current_conversation, 
-                        current_messages, 
-                        current_embeddings
-                    )
-                    stored_count += 1
-                
-                # Start new conversation
-                current_conversation = message_conversation
-                current_messages = [message]
-                current_embeddings = [embeddings[i]]
-            else:
-                current_messages.append(message)
-                current_embeddings.append(embeddings[i])
-        
-        # Store final conversation
-        if current_conversation and current_messages:
-            await db.store_conversation(
-                current_conversation,
-                current_messages, 
-                current_embeddings
-            )
-            stored_count += 1
-        
-        logger.info(f"Stored {stored_count} conversations")
-        
-        # Create vector index for efficient similarity search
-        logger.info("🔍 Creating vector search index...")
-        await db.create_vector_index()
-        
-        # Print final stats
-        stats = await db.get_conversation_stats()
-        logger.info("✅ Ingestion complete!")
-        print_database_stats(stats)
-        
-    finally:
-        await db.close()
-
-
-def print_summary(conversations, messages, embeddings):
-    """Print ingestion summary."""
-    print("\n" + "="*60)
-    print("📊 INGESTION SUMMARY")
-    print("="*60)
-    print(f"Conversations: {len(conversations)}")
-    print(f"Messages: {len(messages)}")
-    print(f"Embeddings: {len(embeddings)}")
-    
-    if conversations:
-        projects = set(conv.project_name for conv in conversations)
-        print(f"Projects: {len(projects)}")
-        
-        # Date range
-        timestamps = []
-        for conv in conversations:
-            if conv.started_at:
-                timestamps.append(conv.started_at)
-            if conv.ended_at:
-                timestamps.append(conv.ended_at)
-        
-        if timestamps:
-            print(f"Date range: {min(timestamps)} to {max(timestamps)}")
-    
-    if embeddings:
-        import numpy as np
-        dims = embeddings[0].shape[0] if embeddings else 0
-        print(f"Embedding dimensions: {dims}")
-        
-        # Calculate approximate storage size
-        storage_mb = (len(embeddings) * dims * 4) / (1024 * 1024)  # 4 bytes per float32
-        print(f"Approximate embedding storage: {storage_mb:.2f} MB")
-    
-    print("="*60)
-
-
-def print_database_stats(stats):
-    """Print database statistics."""
-    print("\n" + "="*60)
-    print("📈 DATABASE STATISTICS")
-    print("="*60)
-    print(f"Conversations: {stats.get('conversation_count', 0)}")
-    print(f"Messages: {stats.get('message_count', 0)}")
-    print(f"Embedded Messages: {stats.get('embedded_message_count', 0)}")
-    print(f"Technical Events: {stats.get('technical_event_count', 0)}")
-    print(f"Projects: {stats.get('project_count', 0)}")
-    
-    earliest = stats.get('earliest_conversation')
-    latest = stats.get('latest_conversation')
-    if earliest and latest:
-        print(f"Date Range: {earliest} to {latest}")
-    
-    print("="*60)
-
-
-# Better conversation-to-message mapping
-async def ingest_conversations_improved(
-    input_path: Path,
-    db_config: DatabaseConfig, 
-    embedding_config: EmbeddingConfig,
-    dry_run: bool = False
-):
-    """Improved ingestion with proper conversation-to-message mapping."""
-    logger.info(f"Starting improved ingestion from {input_path}")
-    
-    # Initialize database and embedder
-    db = ConversationDatabase(db_config) if not dry_run else None
-    if db:
         await db.initialize()
-    
-    try:
-        # Process files individually to maintain conversation boundaries
-        jsonl_files = list(input_path.rglob("*.jsonl"))
-        logger.info(f"Found {len(jsonl_files)} conversation files")
         
         total_conversations = 0
         total_messages = 0
+        total_embedded = 0
         
-        async with OllamaEmbeddings(embedding_config) as embedder:
-            # Check model availability
-            if not await embedder.is_model_available():
-                raise RuntimeError(f"Ollama model {embedding_config.model} not available")
+        for i, project_path in enumerate(project_paths, 1):
+            print(f"\n[{i}/{len(project_paths)}] Processing: {project_path.name}")
+            print("=" * 60)
             
-            for file_path in jsonl_files:
-                try:
-                    logger.info(f"Processing {file_path.name}...")
-                    
-                    # Parse single conversation file
-                    from parser import JSONLParser
-                    parser = JSONLParser()
-                    conversation, messages = parser.parse_conversation_file(file_path)
-                    
-                    if not messages:
-                        logger.warning(f"No messages in {file_path}")
-                        continue
-                    
-                    # Generate embeddings for this conversation
-                    message_contents = [msg.content for msg in messages]
-                    embeddings = await embedder.embed_conversations(message_contents)
-                    
-                    logger.info(f"  Conversation: {conversation.project_name}")
-                    logger.info(f"  Messages: {len(messages)}")
-                    logger.info(f"  Embeddings: {len(embeddings)}")
-                    
-                    # Store conversation if not dry run
-                    if not dry_run and db:
-                        await db.store_conversation(conversation, messages, embeddings)
-                    
-                    total_conversations += 1
-                    total_messages += len(messages)
-                    
-                except Exception as e:
-                    logger.error(f"Failed to process {file_path}: {e}")
+            try:
+                # Check for conversation files
+                jsonl_files = list(project_path.glob('*.jsonl'))
+                if not jsonl_files:
+                    print(f"  ⚠️  No .jsonl files found, skipping")
                     continue
+                
+                print(f"  📄 Found {len(jsonl_files)} conversation files")
+                
+                # Parse conversations
+                grouped_conversations = parse_conversation_files_grouped(project_path)
+                print(f"  📝 Parsed {len(grouped_conversations)} conversations")
+                
+                project_messages = 0
+                project_embedded = 0
+                
+                for j, (conv_meta, messages) in enumerate(grouped_conversations, 1):
+                    print(f"    [{j}/{len(grouped_conversations)}] {conv_meta.session_id[:8]}... ({len(messages)} messages)")
+                    
+                    # Generate embeddings for substantial content
+                    substantial = [m for m in messages if len(m.content.strip()) > 10]
+                    if substantial:
+                        contents = [m.content for m in substantial]
+                        embedding_vectors = await embeddings.embed_conversations(contents)
+                        embedding_dict = {m.uuid: emb for m, emb in zip(substantial, embedding_vectors)}
+                        full_embeddings = [embedding_dict.get(m.uuid) for m in messages]
+                        project_embedded += len(substantial)
+                    else:
+                        full_embeddings = [None] * len(messages)
+                    
+                    # Store in database
+                    try:
+                        conversation_id = await db.store_conversation(conv_meta, messages, full_embeddings)
+                        project_messages += len(messages)
+                        print(f"      ✅ Stored: {conversation_id}")
+                    except Exception as e:
+                        if 'duplicate key' in str(e).lower():
+                            print(f"      ⚠️  Skipped (already exists)")
+                        else:
+                            print(f"      ❌ Failed: {str(e)[:100]}...")
+                
+                total_conversations += len(grouped_conversations)
+                total_messages += project_messages
+                total_embedded += project_embedded
+                
+                print(f"  📊 Project totals: {len(grouped_conversations)} conversations, {project_messages} messages, {project_embedded} embedded")
+                
+            except Exception as e:
+                print(f"  ❌ Project failed: {e}")
+                continue
         
-        if not dry_run and db:
-            # Create vector index
-            logger.info("Creating vector search index...")
-            await db.create_vector_index()
-            
-            # Print final stats
-            stats = await db.get_conversation_stats()
-            print_database_stats(stats)
-        else:
-            print(f"\n✅ Dry run complete: {total_conversations} conversations, {total_messages} messages")
-    
-    finally:
-        if db:
-            await db.close()
-
-
-@click.command()
-@click.argument('input_path', type=click.Path(exists=True, path_type=Path))
-@click.option('--dry-run', is_flag=True, help='Parse and generate embeddings but do not store in database')
-@click.option('--db-host', default='localhost', help='Database host')
-@click.option('--db-port', default=5432, help='Database port')
-@click.option('--db-name', default='claude_conversations', help='Database name')
-@click.option('--db-user', default='claude_user', help='Database user')
-@click.option('--db-password', default='claude_pass', help='Database password')
-@click.option('--ollama-url', default='http://localhost:11434', help='Ollama API URL')
-@click.option('--embedding-model', default='nomic-embed-text', help='Ollama embedding model')
-@click.option('--batch-size', default=32, help='Embedding batch size')
-@click.option('--verbose', '-v', is_flag=True, help='Verbose logging')
-def main(
-    input_path: Path,
-    dry_run: bool,
-    db_host: str,
-    db_port: int,
-    db_name: str,
-    db_user: str,
-    db_password: str,
-    ollama_url: str,
-    embedding_model: str,
-    batch_size: int,
-    verbose: bool
-):
-    """
-    Ingest Claude conversation files into searchable database.
-    
-    INPUT_PATH: Directory containing conversation JSONL files (typically ~/.claude/projects/)
-    """
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-        for handler in logging.getLogger().handlers:
-            handler.setLevel(logging.DEBUG)
-    
-    # Create configurations
-    db_config = DatabaseConfig(
-        host=db_host,
-        port=db_port,
-        database=db_name,
-        username=db_user,
-        password=db_password
-    )
-    
-    embedding_config = EmbeddingConfig(
-        base_url=ollama_url,
-        model=embedding_model,
-        batch_size=batch_size
-    )
-    
-    # Run ingestion
-    try:
-        asyncio.run(ingest_conversations_improved(input_path, db_config, embedding_config, dry_run))
-    except KeyboardInterrupt:
-        logger.info("Ingestion cancelled by user")
+        print(f"\n🎉 INGESTION COMPLETE!")
+        print("=" * 30)
+        print(f"Total conversations: {total_conversations}")
+        print(f"Total messages: {total_messages}")
+        print(f"Total embedded: {total_embedded}")
+        
+        # Final database statistics
+        stats = await db.get_conversation_stats()
+        print(f"\nDatabase statistics:")
+        print(f"  Conversations: {stats.get('conversation_count', 0)}")
+        print(f"  Messages: {stats.get('message_count', 0)}")
+        print(f"  Embedded messages: {stats.get('embedded_message_count', 0)}")
+        print(f"  Projects: {stats.get('project_count', 0)}")
+        
+        return True
+        
     except Exception as e:
-        logger.error(f"Ingestion failed: {e}")
+        print(f"❌ INGESTION FAILED: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        await db.close()
+        await embeddings.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Ingest Claude conversation files into the analyzer database",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s --all                           # Ingest all projects
+  %(prog)s --project "my-project"          # Ingest single project matching "my-project" (fails if multiple)
+  %(prog)s --project-multiple "work"       # Ingest ALL projects matching "work"
+  %(prog)s --project-multiple "mycode"     # Ingest all mycode/project1, mycode/project2, etc.
+  %(prog)s --project-path "/path/to/proj"  # Ingest specific directory
+  %(prog)s --file "conversation.jsonl"     # Ingest single file
+  %(prog)s --list                          # List available projects
+        """
+    )
+    
+    # Mutually exclusive group for input options
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument('--all', action='store_true',
+                            help='Ingest all projects in ~/.claude/projects/')
+    input_group.add_argument('--project', type=str,
+                            help='Project name to search for (partial matching)')
+    input_group.add_argument('--project-multiple', type=str,
+                            help='Project name to search for - ingest ALL matching projects')
+    input_group.add_argument('--project-path', type=Path,
+                            help='Full path to project directory')
+    input_group.add_argument('--file', type=Path,
+                            help='Single conversation file to ingest')
+    input_group.add_argument('--list', action='store_true',
+                            help='List available projects')
+    
+    # Database connection options
+    parser.add_argument('--db-host', default='localhost', help='Database host')
+    parser.add_argument('--db-port', type=int, default=5433, help='Database port')
+    parser.add_argument('--db-name', default='claude_conversations', help='Database name')
+    parser.add_argument('--db-user', default='claude_user', help='Database user')
+    parser.add_argument('--db-password', default='claude_pass', help='Database password')
+    
+    # Claude projects directory
+    parser.add_argument('--claude-projects-dir', type=Path, 
+                       default=Path('~/.claude/projects/').expanduser(),
+                       help='Path to Claude projects directory')
+    
+    args = parser.parse_args()
+    
+    # Create database config
+    db_config = DatabaseConfig(
+        host=args.db_host,
+        port=args.db_port,
+        database=args.db_name,
+        username=args.db_user,
+        password=args.db_password
+    )
+    
+    # Handle list option
+    if args.list:
+        list_available_projects(args.claude_projects_dir)
+        return
+    
+    # Determine project paths to ingest
+    project_paths = []
+    
+    try:
+        if args.all:
+            # Find all projects with conversation files
+            for project_dir in args.claude_projects_dir.glob('*'):
+                if project_dir.is_dir() and list(project_dir.glob('*.jsonl')):
+                    project_paths.append(project_dir)
+            
+            if not project_paths:
+                print(f"No projects with conversation files found in {args.claude_projects_dir}")
+                return
+                
+            print(f"Found {len(project_paths)} projects to ingest")
+            
+        elif args.project:
+            # Find single project by name (strict matching)
+            project_matches = find_projects_by_name(args.project, args.claude_projects_dir, allow_multiple=False)
+            project_paths.extend(project_matches)
+            
+        elif args.project_multiple:
+            # Find multiple projects by name (allow multiple matches)
+            project_matches = find_projects_by_name(args.project_multiple, args.claude_projects_dir, allow_multiple=True)
+            project_paths.extend(project_matches)
+            
+        elif args.project_path:
+            # Use specified path
+            if not args.project_path.exists():
+                print(f"Project path does not exist: {args.project_path}")
+                return
+            project_paths.append(args.project_path)
+            
+        elif args.file:
+            # Single file - create temporary directory structure
+            if not args.file.exists():
+                print(f"File does not exist: {args.file}")
+                return
+            project_paths.append(args.file.parent)
+        
+        # Run ingestion
+        result = asyncio.run(ingest_conversations(project_paths, db_config))
+        sys.exit(0 if result else 1)
+        
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nIngestion cancelled by user")
         sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
