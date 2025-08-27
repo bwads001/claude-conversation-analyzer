@@ -68,10 +68,10 @@ echo "  🌐 React web interface"
 echo ""
 
 # Stop any existing services from this project
-docker-compose -f config/docker-compose.yml down --remove-orphans &> /dev/null
+docker-compose -f config/docker-compose.yml --env-file .env down --remove-orphans &> /dev/null
 
 # Start services with live output
-if docker-compose -f config/docker-compose.yml up -d; then
+if docker-compose -f config/docker-compose.yml --env-file .env up -d; then
     echo ""
     print_success "All services started successfully!"
     
@@ -89,7 +89,7 @@ if docker-compose -f config/docker-compose.yml up -d; then
     
     # Check database health
     for i in {1..30}; do
-        if docker-compose -f config/docker-compose.yml exec -T postgres pg_isready -U claude -d conversations &> /dev/null; then
+        if docker-compose -f config/docker-compose.yml --env-file .env exec -T postgres pg_isready -U claude -d conversations &> /dev/null; then
             print_success "Database is ready"
             break
         fi
