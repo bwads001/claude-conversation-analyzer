@@ -129,9 +129,9 @@ WHERE c.started_at > NOW() - INTERVAL '30 days'
 ORDER BY te.timestamp DESC;
 
 -- Grant permissions to application user
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO claude_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO claude_user;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO claude_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO claude;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO claude;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO claude;
 
 -- Initial database stats
 INSERT INTO conversations (project_name, project_path, session_id, file_path, message_count) 
