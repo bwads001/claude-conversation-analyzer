@@ -96,14 +96,21 @@ async def search_conversations(
     embeddings = OllamaEmbeddings()
     
     try:
+        print(f"[DEBUG] Search request: q='{q}', project={project}, limit={limit}")
+        
+        print("[DEBUG] Initializing database...")
         await db.initialize()
         
+        print("[DEBUG] Checking embedding model availability...")
         # Check if embedding model is available
         if not await embeddings.is_model_available():
-            raise HTTPException(status_code=503, detail="Embedding model not available")
+            print("[ERROR] Embedding model not available")
+            raise HTTPException(status_code=503, detail="Embedding model not available. Make sure Ollama is running with 'nomic-embed-text' model.")
         
+        print("[DEBUG] Generating query embedding...")
         # Generate query embedding
         query_embedding = await embeddings.embed_single(q)
+        print(f"[DEBUG] Generated embedding with {len(query_embedding)} dimensions")
         
         # Parse date filters
         date_after_dt = None
@@ -113,6 +120,7 @@ async def search_conversations(
         if date_before:
             date_before_dt = datetime.strptime(date_before, "%Y-%m-%d")
         
+        print("[DEBUG] Searching database...")
         # Search database
         results = await db.search_similar(
             query_embedding,
@@ -122,6 +130,7 @@ async def search_conversations(
             date_after=date_after_dt,
             date_before=date_before_dt
         )
+        print(f"[DEBUG] Found {len(results)} results")
         
         # Convert to response format
         search_results = [
@@ -144,11 +153,22 @@ async def search_conversations(
             query=q
         )
         
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[ERROR] Unexpected error in search: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     finally:
-        await db.close()
-        await embeddings.close()
+        try:
+            await db.close()
+        except:
+            pass
+        try:
+            await embeddings.close()
+        except:
+            pass
 
 @app.get("/api/conversations/{conversation_id}", response_model=Conversation)
 async def get_conversation(conversation_id: str):
@@ -184,7 +204,7 @@ async def get_conversation(conversation_id: str):
                     role=msg['role'],
                     content=msg['content'],
                     timestamp=msg['timestamp'],
-                    tool_uses=msg['tool_uses']
+                    tool_uses=msg['tool_uses'] if isinstance(msg['tool_uses'], dict) else None
                 )
                 for msg in message_results
             ]
@@ -256,7 +276,7 @@ async def get_conversation_context(
                     role=msg['role'],
                     content=msg['content'],
                     timestamp=msg['timestamp'],
-                    tool_uses=msg['tool_uses']
+                    tool_uses=msg['tool_uses'] if isinstance(msg['tool_uses'], dict) else None
                 )
                 for msg in message_results
             ]

@@ -332,7 +332,7 @@ class ConversationDatabase:
                 c.project_name,
                 c.session_id,
                 c.git_branch,
-                c.file_path
+                c.id as conversation_id
             FROM messages m
             JOIN conversations c ON m.conversation_id = c.id
             WHERE {where_clause}
@@ -354,7 +354,7 @@ class ConversationDatabase:
                     'project_name': row['project_name'],
                     'session_id': row['session_id'],
                     'git_branch': row['git_branch'],
-                    'file_path': row['file_path']
+                    'conversation_id': str(row['conversation_id'])
                 }
                 for row in results
             ]
