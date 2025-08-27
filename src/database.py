@@ -17,9 +17,9 @@ import numpy as np
 from asyncpg import Connection, Pool
 
 try:
-    from .parser import ConversationMetadata, ParsedMessage
+    from .parser import ConversationMetadata, ParsedMessage  # type: ignore[no-redef]
 except ImportError:
-    from parser import ConversationMetadata, ParsedMessage
+    from parser import ConversationMetadata, ParsedMessage  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
 

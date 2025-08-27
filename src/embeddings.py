@@ -6,7 +6,7 @@ Handles local embedding generation using Ollama API.
 
 import asyncio
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import json
 from dataclasses import dataclass
 
@@ -29,7 +29,7 @@ class EmbeddingConfig:
 class OllamaEmbeddings:
     """Ollama embeddings client for local embedding generation."""
     
-    def __init__(self, config: EmbeddingConfig = None):
+    def __init__(self, config: Optional[EmbeddingConfig] = None):
         self.config = config or EmbeddingConfig()
         self.logger = logging.getLogger(__name__)
         self.client = httpx.AsyncClient(
@@ -179,8 +179,11 @@ class OllamaEmbeddings:
                         self.logger.error(f"Error embedding text {i+j}: {result}")
                         # Add zero vector for failed embeddings
                         batch_embeddings.append(np.zeros(768, dtype=np.float32))
-                    else:
+                    elif isinstance(result, np.ndarray):
                         batch_embeddings.append(result)
+                    else:
+                        self.logger.error(f"Unexpected result type {type(result)} for text {i+j}")
+                        batch_embeddings.append(np.zeros(768, dtype=np.float32))
                 
                 embeddings.extend(batch_embeddings)
                 
@@ -243,7 +246,7 @@ class OllamaEmbeddings:
         return content
 
 
-async def test_ollama_embeddings(config: EmbeddingConfig = None):
+async def test_ollama_embeddings(config: Optional[EmbeddingConfig] = None):
     """Test Ollama embeddings functionality."""
     config = config or EmbeddingConfig()
     
