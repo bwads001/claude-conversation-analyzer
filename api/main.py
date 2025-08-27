@@ -5,7 +5,7 @@ FastAPI backend for Claude Conversation Analyzer web interface.
 
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import datetime
 import asyncio
 import json
@@ -65,7 +65,7 @@ class Message(BaseModel):
     role: str
     content: str
     timestamp: Optional[datetime]
-    tool_uses: Optional[dict] = None
+    tool_uses: Optional[Union[dict, str]] = None
 
 class Conversation(BaseModel):
     id: str
@@ -75,6 +75,23 @@ class Conversation(BaseModel):
     ended_at: Optional[datetime]
     git_branch: Optional[str]
     messages: List[Message]
+
+class ConversationSummary(BaseModel):
+    id: str
+    project_name: str
+    session_id: str
+    started_at: Optional[datetime]
+    ended_at: Optional[datetime]
+    git_branch: Optional[str]
+    message_count: int
+
+class ConversationsResponse(BaseModel):
+    conversations: List[ConversationSummary]
+    total: int
+
+class MessagesResponse(BaseModel):
+    messages: List[Message]
+    total: int
 
 @app.get("/api/health")
 async def health_check():
@@ -179,16 +196,26 @@ async def get_conversation(conversation_id: str):
                 ORDER BY timestamp ASC, created_at ASC
             """, conversation_id)
             
-            messages = [
-                Message(
+            messages = []
+            for msg in message_results:
+                # Handle tool_uses field - pass as string if not a dict, or try to parse
+                tool_uses = msg['tool_uses']
+                if tool_uses and isinstance(tool_uses, str):
+                    try:
+                        # Try to parse as JSON, but fallback to string if it fails
+                        parsed = json.loads(tool_uses)
+                        tool_uses = parsed if isinstance(parsed, dict) else tool_uses
+                    except (json.JSONDecodeError, TypeError):
+                        # Keep as string if parsing fails
+                        pass
+                
+                messages.append(Message(
                     id=str(msg['id']),
                     role=msg['role'],
                     content=msg['content'],
                     timestamp=msg['timestamp'],
-                    tool_uses=msg['tool_uses'] if isinstance(msg['tool_uses'], dict) else (json.loads(msg['tool_uses']) if msg['tool_uses'] else None)
-                )
-                for msg in message_results
-            ]
+                    tool_uses=tool_uses
+                ))
             
             return Conversation(
                 id=str(conv_result['id']),
@@ -270,6 +297,112 @@ async def get_conversation_context(
                 ended_at=conv_result['ended_at'],
                 git_branch=conv_result['git_branch'],
                 messages=messages
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await db.close()
+
+@app.get("/api/conversations", response_model=ConversationsResponse)
+async def get_conversations(
+    limit: Optional[int] = Query(100, description="Maximum conversations to return")
+):
+    """Get all conversations (summaries only)."""
+    
+    db = ConversationDatabase(db_config)
+    
+    try:
+        await db.initialize()
+        
+        async with db.get_connection() as conn:
+            results = await conn.fetch("""
+                SELECT id, project_name, session_id, started_at, ended_at, git_branch, message_count
+                FROM conversations 
+                WHERE project_name != '__system__'
+                ORDER BY started_at DESC
+                LIMIT $1
+            """, limit)
+            
+            conversations = [
+                ConversationSummary(
+                    id=str(row['id']),
+                    project_name=row['project_name'],
+                    session_id=row['session_id'],
+                    started_at=row['started_at'],
+                    ended_at=row['ended_at'],
+                    git_branch=row['git_branch'],
+                    message_count=row['message_count'] or 0
+                )
+                for row in results
+            ]
+            
+            return ConversationsResponse(
+                conversations=conversations,
+                total=len(conversations)
+            )
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await db.close()
+
+@app.get("/api/conversations/{conversation_id}/messages", response_model=MessagesResponse)
+async def get_conversation_messages(
+    conversation_id: str,
+    limit: Optional[int] = Query(1000, description="Maximum messages to return")
+):
+    """Get all messages for a conversation."""
+    
+    db = ConversationDatabase(db_config)
+    
+    try:
+        await db.initialize()
+        
+        async with db.get_connection() as conn:
+            # Check if conversation exists
+            conv_exists = await conn.fetchval("""
+                SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1)
+            """, conversation_id)
+            
+            if not conv_exists:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            
+            # Get messages
+            message_results = await conn.fetch("""
+                SELECT id, role, content, timestamp, tool_uses, embedding
+                FROM messages 
+                WHERE conversation_id = $1
+                ORDER BY timestamp ASC, created_at ASC
+                LIMIT $2
+            """, conversation_id, limit)
+            
+            messages = []
+            for msg in message_results:
+                # Handle tool_uses field - pass as string if not a dict, or try to parse
+                tool_uses = msg['tool_uses']
+                if tool_uses and isinstance(tool_uses, str):
+                    try:
+                        # Try to parse as JSON, but fallback to string if it fails
+                        parsed = json.loads(tool_uses)
+                        tool_uses = parsed if isinstance(parsed, dict) else tool_uses
+                    except (json.JSONDecodeError, TypeError):
+                        # Keep as string if parsing fails
+                        pass
+                
+                messages.append(Message(
+                    id=str(msg['id']),
+                    role=msg['role'],
+                    content=msg['content'],
+                    timestamp=msg['timestamp'],
+                    tool_uses=tool_uses
+                ))
+            
+            return MessagesResponse(
+                messages=messages,
+                total=len(messages)
             )
             
     except HTTPException:
