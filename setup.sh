@@ -328,7 +328,7 @@ echo "Waiting for database to be ready..."
 sleep 5
 
 # Run database initialization
-if docker-compose -f config/docker-compose.yml exec -T api python scripts/init_db.py; then
+if docker-compose -f config/docker-compose.yml exec -T api python scripts/init_db.py --db-host postgres --db-port 5432 --db-name conversations --db-user claude --db-password claude_analyzer_2024; then
     print_success "Database initialized successfully!"
 else
     print_warning "Database initialization had issues. This might be okay if it's already initialized."
