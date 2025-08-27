@@ -68,16 +68,16 @@ echo "  🌐 React web interface"
 echo ""
 
 # Stop any existing services from this project
-docker-compose -f config/docker-compose.yml --env-file .env down --remove-orphans &> /dev/null
+docker-compose -f config/docker-compose.yml down --remove-orphans &> /dev/null
 
 # Start services with live output
-if docker-compose -f config/docker-compose.yml --env-file .env up -d; then
+if docker-compose -f config/docker-compose.yml up -d; then
     echo ""
     print_success "All services started successfully!"
     
     # Detect the assigned ports
-    WEB_PORT=$(docker-compose -f config/docker-compose.yml --env-file .env port web 80 2>/dev/null | cut -d: -f2)
-    API_PORT=$(docker-compose -f config/docker-compose.yml --env-file .env port api 8000 2>/dev/null | cut -d: -f2)
+    WEB_PORT=$(docker-compose -f config/docker-compose.yml port web 80 2>/dev/null | cut -d: -f2)
+    API_PORT=$(docker-compose -f config/docker-compose.yml port api 8000 2>/dev/null | cut -d: -f2)
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -93,7 +93,7 @@ if docker-compose -f config/docker-compose.yml --env-file .env up -d; then
     
     # Check database health
     for i in {1..30}; do
-        if docker-compose -f config/docker-compose.yml --env-file .env exec -T postgres pg_isready -U claude -d conversations &> /dev/null; then
+        if docker-compose -f config/docker-compose.yml exec -T postgres pg_isready -U claude -d conversations &> /dev/null; then
             print_success "Database is ready"
             break
         fi
