@@ -319,25 +319,10 @@ fi
 
 echo ""
 
-# Step 7: Initialize database
-print_step "Step 7: Initializing database..."
-echo ""
+# Database is automatically initialized by init_db.sql when PostgreSQL starts
 
-# Wait for PostgreSQL to be ready
-echo "Waiting for database to be ready..."
-sleep 5
-
-# Run database initialization
-if docker-compose -f config/docker-compose.yml exec -T api python scripts/init_db.py --db-host postgres --db-port 5432 --db-name conversations --db-user claude --db-password claude_analyzer_2024; then
-    print_success "Database initialized successfully!"
-else
-    print_warning "Database initialization had issues. This might be okay if it's already initialized."
-fi
-
-echo ""
-
-# Step 8: Import conversations
-print_step "Step 8: Importing your conversations..."
+# Step 7: Import conversations  
+print_step "Step 7: Importing your conversations..."
 echo ""
 echo "This will process your Claude conversation files and make them searchable."
 echo "Depending on how many conversations you have, this might take a few minutes."
