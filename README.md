@@ -2,6 +2,8 @@
 
 A semantic search and timeline analysis tool for Claude Code conversation history. Build a searchable knowledge base from your AI pair programming sessions, track technical accomplishments over time, and generate work journals for performance reviews.
 
+**Now with Web Interface!** - Search your conversations with a modern React UI and explore results with full conversation context.
+
 ## 🎯 Problem Statement
 
 When using Claude Code across multiple sessions and projects, valuable technical context gets fragmented across numerous JSONL files. This tool solves:
@@ -13,36 +15,52 @@ When using Claude Code across multiple sessions and projects, valuable technical
 
 ## 🚀 Features
 
-- **Semantic Search**: Find conversations by meaning, not just keywords
+### Core Functionality
+- **Semantic Search**: Find conversations by meaning, not just keywords  
 - **Timeline Analysis**: Chronological view of technical work across sessions
 - **Project-Based Organization**: Leverages Claude's existing project structure
 - **Local Processing**: All data stays on your machine, using local Ollama embeddings
 - **Work Journal Generation**: Automated technical accomplishment summaries
 - **Hybrid Search**: Combine semantic similarity with SQL filters (date ranges, projects, file types)
 
+### Web Interface (NEW!)
+- **Modern React UI**: Clean, responsive interface for searching conversations
+- **Result Cards**: Visual search results with similarity scores and context
+- **Conversation Viewer**: Click any result to see full conversation context
+- **Smart Context**: View messages around matches or full conversations  
+- **Advanced Filters**: Filter by project, date range, role, similarity threshold
+- **Syntax Highlighting**: Code blocks and tool uses properly formatted
+- **Real-time Search**: Powered by semantic embeddings for intelligent matching
+
 ## 🏗️ Architecture
 
 ```
-Claude JSONL Files → Parser → PostgreSQL + pgvector → Search Interface
-                         ↓
-                    Ollama Embeddings
+Claude JSONL Files → Parser → PostgreSQL + pgvector → FastAPI → React UI
+                         ↓                              ↓
+                    Ollama Embeddings              Command Line
                     (local GPU accelerated)
 ```
 
 ### Technology Stack
 - **Database**: PostgreSQL with pgvector extension for hybrid SQL + vector search
-- **Embeddings**: Ollama with models like `nomic-embed-text` (768 dims) or `mxbai-embed-large` (1024 dims)
+- **Embeddings**: Ollama with models like `nomic-embed-text` (768 dims) or `mxbai-embed-large` (1024 dims)  
 - **Backend**: Python with asyncpg, numpy, and FastAPI
-- **Frontend**: (Optional) Web UI for search and visualization
+- **Frontend**: React + TypeScript with Vite, Tailwind CSS, and React Query
+- **CLI Tools**: Python scripts for ingestion and command-line search
 - **Container**: Docker Compose for PostgreSQL + pgvector
 
 ## 📋 Requirements
 
+### Core System
 - Docker & Docker Compose
 - Python 3.10+
 - Ollama installed locally with an embedding model
 - NVIDIA GPU recommended (but CPU works too)
 - ~2GB disk space for database (grows with conversation history)
+
+### Web Interface (Optional)
+- Node.js 18+ and npm (for React frontend)
+- Modern web browser with JavaScript enabled
 
 ## 🛠️ Installation
 
@@ -78,10 +96,54 @@ python scripts/init_db.py
 
 6. **Import your conversation history**
 ```bash
-python scripts/ingest.py ~/.claude/projects/
+# Ingest all projects  
+python scripts/ingest_flexible.py --all
+
+# Or target specific projects
+python scripts/ingest_flexible.py --project "my-project-name"
+```
+
+7. **Start the web interface (optional)**
+```bash
+# Single command to start both servers
+./start-dev.sh
+
+# Or use npm (if you prefer)
+npm run dev
+
+# Open http://localhost:3000 in your browser
+```
+
+**Alternative (manual startup):**
+```bash
+# Terminal 1: Start API server
+source venv/bin/activate && python api/main.py
+
+# Terminal 2: Start React frontend  
+cd web && npm run dev
 ```
 
 ## 🔍 Usage
+
+### Web Interface (Recommended)
+
+1. **Start both servers** with a single command:
+   ```bash
+   # Single command startup
+   ./start-dev.sh
+   
+   # The script will start both:
+   # - FastAPI backend on http://localhost:8000
+   # - React frontend on http://localhost:3000
+   ```
+
+2. **Open your browser** to `http://localhost:3000`
+
+3. **Search your conversations**:
+   - Enter keywords like "database performance", "React components", "error handling"
+   - Use filters to narrow by project, date range, or role
+   - Click result cards to see full conversation context
+   - Switch between context view (messages around match) and full conversation
 
 ### Command Line Search
 ```bash

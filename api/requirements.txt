@@ -1,0 +1,7 @@
+# FastAPI requirements for the web interface
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# Use existing dependencies from main project
+# These will be symlinked or imported from parent directory
