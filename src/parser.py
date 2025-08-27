@@ -148,8 +148,13 @@ class JSONLParser:
         """Parse a single message from the JSONL format."""
         try:
             # Extract basic fields
-            msg_uuid = raw_msg.get('uuid', str(uuid4()))
             msg_type = raw_msg.get('type', 'unknown')
+            
+            # Handle UUID differently for summary vs regular messages
+            if msg_type == 'summary':
+                msg_uuid = raw_msg.get('leafUuid', str(uuid4()))
+            else:
+                msg_uuid = raw_msg.get('uuid', str(uuid4()))
             
             # Parse timestamp
             timestamp = None
@@ -159,10 +164,19 @@ class JSONLParser:
                     timestamp = datetime.fromisoformat(raw_msg['timestamp'].replace('Z', '+00:00'))
                 except (ValueError, TypeError) as e:
                     self.logger.debug(f"Could not parse timestamp '{raw_msg.get('timestamp')}': {e}")
+            elif msg_type == 'summary' and metadata.started_at:
+                # Summary messages don't have timestamps, use conversation start time
+                timestamp = metadata.started_at
             
-            # Extract message content and role
-            message_data = raw_msg.get('message', {})
-            role = message_data.get('role', msg_type)
+            # Handle different message formats
+            if msg_type == 'summary':
+                # Summary messages have a different structure
+                role = 'summary'
+                message_data = {'content': raw_msg.get('summary', '')}
+            else:
+                # Regular messages have a 'message' field
+                message_data = raw_msg.get('message', {})
+                role = message_data.get('role', msg_type)
             
             # Detect and reclassify tool results as tool messages
             # Tool results have role='user' but contain tool_result content blocks or toolUseResult data
