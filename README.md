@@ -160,23 +160,7 @@ python scripts/search_cli.py "AWS infrastructure" --after "2025-08-01" --before 
 python scripts/search_cli.py --similar-to "error: package com.example.data does not exist"
 ```
 
-### Generate Work Journal
-```bash
-# Generate journal for specific week
-python scripts/generate_journal.py --week "2025-W34"
 
-# Generate monthly summary
-python scripts/generate_journal.py --month "2025-08"
-
-# Export for performance review
-python scripts/generate_journal.py --format markdown --output ~/work-journal-august.md
-```
-
-### Web Interface (Optional)
-```bash
-python web/app.py
-# Open http://localhost:8000
-```
 
 ## 📊 Database Schema
 
@@ -195,7 +179,7 @@ conversations (
 messages (
     id UUID PRIMARY KEY,
     conversation_id UUID REFERENCES conversations,
-    role TEXT,  -- 'user' or 'assistant'
+    role TEXT,  -- 'user', 'assistant', 'tool', 'system', or 'summary'
     content TEXT,
     embedding vector(768),  -- Semantic search vector
     timestamp TIMESTAMP,
@@ -216,33 +200,6 @@ CREATE INDEX ON conversations (project_name, started_at);
 CREATE INDEX ON technical_events (event_type, timestamp);
 ```
 
-## 🎯 Planned Features
-
-### Phase 1: Core Functionality (Current Focus)
-- [x] Project structure and setup
-- [ ] JSONL parser for Claude conversations
-- [ ] Ollama embedding integration
-- [ ] PostgreSQL + pgvector setup
-- [ ] Basic semantic search CLI
-- [ ] Timeline extraction
-
-### Phase 2: Enhanced Search
-- [ ] Hybrid search (semantic + keyword + filters)
-- [ ] Search result ranking improvements
-- [ ] Code snippet extraction
-- [ ] Error pattern recognition
-
-### Phase 3: Analysis & Reporting
-- [ ] Automated work journal generation
-- [ ] Technical accomplishment summaries
-- [ ] Cross-project pattern analysis
-- [ ] Performance metric extraction
-
-### Phase 4: User Interface
-- [ ] Web-based search interface
-- [ ] Timeline visualization
-- [ ] Project relationship graphs
-- [ ] Export capabilities (Markdown, JSON, CSV)
 
 ## 🤝 Contributing
 

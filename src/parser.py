@@ -164,8 +164,23 @@ class JSONLParser:
             message_data = raw_msg.get('message', {})
             role = message_data.get('role', msg_type)
             
-            # Preserve original role exactly as recorded by Claude
-            # No normalization or constraints - keep the actual data
+            # Detect and reclassify tool results as tool messages
+            # Tool results have role='user' but contain tool_result content blocks or toolUseResult data
+            is_tool_response = False
+            
+            # Check for tool_result content blocks
+            if role == 'user' and isinstance(message_data.get('content'), list):
+                content_blocks = message_data.get('content', [])
+                if any(block.get('type') == 'tool_result' for block in content_blocks if isinstance(block, dict)):
+                    is_tool_response = True
+            
+            # Also check for toolUseResult data (alternative tool response format)
+            if role == 'user' and 'toolUseResult' in raw_msg:
+                is_tool_response = True
+            
+            # Reclassify as tool message
+            if is_tool_response:
+                role = 'tool'
             
             # Handle content - can be string or array of content blocks
             content = self._extract_content(message_data.get('content', ''))
