@@ -37,7 +37,7 @@ services:
     ports:
       - "8000"
     volumes:
-      - ${CLAUDE_DATA_PATH:-/tmp}:/app/data:ro
+      - ~/.claude/projects:/app/data:ro
     depends_on:
       postgres:
         condition: service_healthy

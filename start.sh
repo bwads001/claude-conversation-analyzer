@@ -31,11 +31,12 @@ print_success() {
 clear
 print_header
 
-# Check if setup was run
-if [ ! -f .env ]; then
-    echo "⚠️  Setup has not been completed yet."
+# Check if Claude conversations directory exists
+if [ ! -d ~/.claude/projects ]; then
+    echo "⚠️  Claude conversations not found at ~/.claude/projects"
     echo ""
-    echo "Please run the setup script first:"
+    echo "Please make sure you have Claude Code installed and have some conversations."
+    echo "Then run the setup script:"
     echo "  ${GREEN}./setup.sh${NC}"
     echo ""
     exit 1
@@ -49,14 +50,6 @@ if ! docker info &> /dev/null; then
     exit 1
 fi
 
-# Load environment variables
-if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
-fi
-
-# Set default ports if not specified
-FRONTEND_PORT=${FRONTEND_PORT:-3000}
-BACKEND_PORT=${BACKEND_PORT:-8000}
 
 # Start services
 print_step "Starting all services..."
