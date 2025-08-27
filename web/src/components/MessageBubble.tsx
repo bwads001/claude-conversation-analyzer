@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { User, Bot, Settings, ChevronDown, ChevronRight, Code, Terminal, Wrench } from 'lucide-react'
+import { useState } from "react"
+import { User, Bot, Settings, ChevronDown, ChevronRight, Terminal, Wrench } from 'lucide-react'
 import { Message } from '../types'
 
 interface MessageBubbleProps {

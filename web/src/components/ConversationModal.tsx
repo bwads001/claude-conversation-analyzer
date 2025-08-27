@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { X, MessageSquare, Calendar, GitBranch, ExternalLink, ArrowLeft, ArrowRight } from 'lucide-react'
+import { useState } from "react"
+import { X, Calendar, GitBranch } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { getConversation, getConversationContext } from '../api/search'
 import { SearchResult } from '../types'
@@ -147,7 +147,7 @@ export default function ConversationModal({ result, onClose }: ConversationModal
                 <div className="max-w-none">
                   {/* Messages */}
                   <div className="space-y-4">
-                    {currentData.messages.map((message, index) => (
+                    {currentData.messages.map((message) => (
                       <MessageBubble
                         key={message.id}
                         message={message}

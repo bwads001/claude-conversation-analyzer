@@ -1,4 +1,3 @@
-import React from 'react'
 import { MessageSquare, Calendar, GitBranch, User, Bot, Settings } from 'lucide-react'
 import { SearchResult } from '../types'
 

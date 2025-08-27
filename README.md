@@ -51,99 +51,114 @@ Claude JSONL Files → Parser → PostgreSQL + pgvector → FastAPI → React UI
 
 ## 📋 Requirements
 
-### Core System
-- Docker & Docker Compose
-- Python 3.10+
-- Ollama installed locally with an embedding model
-- NVIDIA GPU recommended (but CPU works too)
+### Quick Start (Docker Setup)
+- **Docker Desktop** (Windows/Mac) or **Docker + Docker Compose** (Linux)
+- **Ollama** with `nomic-embed-text` model
 - ~2GB disk space for database (grows with conversation history)
+- Modern web browser
 
-### Web Interface (Optional)
-- Node.js 18+ and npm (for React frontend)
-- Modern web browser with JavaScript enabled
+### Optional for GPU Acceleration
+- NVIDIA GPU with drivers (greatly improves embedding speed)
+
+### Manual Development Setup  
+- Python 3.10+
+- Node.js 18+ and npm
+- PostgreSQL with pgvector (or use Docker)
 
 ## 🛠️ Installation
 
+**Easy Docker Setup (Recommended for beginners)**
+
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/claude-conversation-analyzer
+git clone https://github.com/bwads001/claude-conversation-analyzer
 cd claude-conversation-analyzer
 ```
 
-2. **Start PostgreSQL with pgvector**
+2. **Run the interactive setup**
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+The setup script will:
+- Check system requirements (Docker, Ollama)
+- Find your Claude conversation files automatically
+- Configure the environment
+- Pull required Docker images
+- Initialize the database
+
+3. **Start all services**
+```bash
+./start.sh
+```
+This will start PostgreSQL, the API server, and web interface in Docker containers.
+
+4. **Open your browser to [http://localhost:3000](http://localhost:3000)**
+
+---
+
+**Manual Installation (For developers)**
+
+<details>
+<summary>Click to expand manual installation steps</summary>
+
+1. **Clone and navigate**
+```bash
+git clone https://github.com/bwads001/claude-conversation-analyzer
+cd claude-conversation-analyzer
+```
+
+2. **Copy environment configuration**
+```bash
+cp .env.example .env
+# Edit .env with your Claude data path and preferences
+```
+
+3. **Start with Docker Compose**
 ```bash
 docker-compose up -d
 ```
 
-3. **Install Python dependencies**
+4. **Alternative: Local development setup**
 ```bash
+# Start PostgreSQL only
+docker-compose up -d postgres
+
+# Install Python dependencies
 python -m venv venv
 source venv/bin/activate  # or `venv\Scripts\activate` on Windows
 pip install -r requirements.txt
-```
 
-4. **Pull an embedding model for Ollama**
-```bash
-ollama pull nomic-embed-text  # Recommended: good balance of speed/quality
-# or
-ollama pull mxbai-embed-large  # Better quality, slower
-```
+# Install Ollama and pull embedding model
+ollama pull nomic-embed-text
 
-5. **Initialize the database**
-```bash
+# Initialize database and ingest conversations
 python scripts/init_db.py
-```
-
-6. **Import your conversation history**
-```bash
-# Ingest all projects  
 python scripts/ingest_flexible.py --all
 
-# Or target specific projects
-python scripts/ingest_flexible.py --project "my-project-name"
+# Start development servers
+./start-dev.sh  # Starts API + web frontend
 ```
 
-7. **Start the web interface (optional)**
-```bash
-# Single command to start both servers
-./start-dev.sh
-
-# Or use npm (if you prefer)
-npm run dev
-
-# Open http://localhost:3000 in your browser
-```
-
-**Alternative (manual startup):**
-```bash
-# Terminal 1: Start API server
-source venv/bin/activate && python api/main.py
-
-# Terminal 2: Start React frontend  
-cd web && npm run dev
-```
+</details>
 
 ## 🔍 Usage
 
 ### Web Interface (Recommended)
 
-1. **Start both servers** with a single command:
-   ```bash
-   # Single command startup
-   ./start-dev.sh
-   
-   # The script will start both:
-   # - FastAPI backend on http://localhost:8000
-   # - React frontend on http://localhost:3000
-   ```
+After running `./start.sh`, your Claude Conversation Analyzer will be ready at **http://localhost:3000**.
 
-2. **Open your browser** to `http://localhost:3000`
+**Search Features:**
+- Enter keywords like "database performance", "React components", "error handling"  
+- Use the filter icon to narrow by project, date range, or role
+- Click result cards to see full conversation context
+- Switch between context view (messages around match) and full conversation
 
-3. **Search your conversations**:
-   - Enter keywords like "database performance", "React components", "error handling"
-   - Use filters to narrow by project, date range, or role
-   - Click result cards to see full conversation context
-   - Switch between context view (messages around match) and full conversation
+**Example Searches:**
+- `"API error handling"` - Find conversations about error management
+- `"performance optimization"` - Discover performance-related discussions  
+- `"database migration"` - Search for database-related work
+- `"React component design"` - Find frontend development conversations
 
 ### Command Line Search
 ```bash

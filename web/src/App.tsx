@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import SearchInterface from './components/SearchInterface'
 import ConversationModal from './components/ConversationModal'
 import { SearchResult } from './types'
